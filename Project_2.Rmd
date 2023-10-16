@@ -1,0 +1,134 @@
+---
+title: "Project2"
+author: "Brandon(23813666)"
+date: "2023-10-08"
+output: html_document
+---
+
+```{r}
+data.path <- "C:/Users/Administrator/Desktop/youtube_UTF_8.csv"
+youtube <- read.csv(data.path)
+```
+
+## Dataset Setup, load required libraries
+```{r}
+library(shiny)
+library(bslib)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(treemapify)
+library(tidyr)
+library(reshape2)
+library(ca)
+library(scales)
+library(shinyWidgets)
+library(caret)
+library(rpart)
+```
+
+
+```{r}
+
+head(youtube)
+summary(youtube)
+```
+
+## Part 1 - Classification for YouTube Data
+Choose the Response (Target) Variable:
+
+One potential response variable for a YouTube dataset might be the monthly earnings of the channel. Earnings can provide a direct indicator of the success of a channel in monetary terms. in the YouTube data we have both the "lowest_monthly_earnings" and "highest_monthly_earnings". We could take an average of these two columns as a representation of monthly earnings.
+
+```{r}
+
+# 1. Calculate average monthly earnings and binary target column
+youtube <- youtube %>%
+  mutate(average_monthly_earnings = (highest_monthly_earnings + lowest_monthly_earnings) / 2) 
+
+# Compute the median value of the average monthly earnings
+median_earnings <- median(youtube$average_monthly_earnings, na.rm = TRUE)
+
+# Create binary classification target variable based on the median
+youtube <- youtube %>%
+  mutate(earning_label = ifelse(average_monthly_earnings >= median_earnings, "high-earning", "low-earning"))
+
+# Check the distribution of the target variable
+table(youtube$earning_label)
+
+```
+
+## Including Plots
+Explanation for Selecting Category:
+The category of content a channel creates can determine its audience size, advertiser interest, and engagement rates. Different content categories have varying levels of competition, audience demographics, and monetization potential.So,stakeholders can get insights into its potential viewership demographics, advertising potential, and competition level. The category can be a determining factor in the type of content a channel produces, its upload frequency, collaboration potential, and overall strategy. Given that monetization on YouTube is closely tied to viewer engagement and advertiser interest, the Category becomes a vital predictor for understanding a channel's potential earnings and success on the platform.
+
+```{r pressure, echo=FALSE}
+# Candidate predictors for the YouTube dataset
+candidate.columns <- c(
+  "Country",       # Country of origin
+  "category",      # Type of content
+  "uploads",           # Number of videos uploaded
+  "subscribers",       # Number of subscribers
+  "video.views",       # Total video views
+  "created_year",      # Year when the channel was created
+  "created_month"      # Month when the channel was created
+)
+
+# Outcome variable
+outcome <- 'earning_label'
+
+# If using a binary classification with labels 'high-earning' and 'low-earning'
+# We can define the positive label as 'high-earning' 
+pos.label <- "high-earning"
+data <- youtube[, c(outcome, candidate.columns)]
+col_num <- which(colnames(data) %in% c("uploads", "subscribers", "video_views", "created_year", "created_month"))
+data[,-col_num] <- lapply(data[,-col_num], factor)
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r pressure, echo=FALSE}
+# Calculate the number of high-earning and low-earning channels per year
+channels_per_year <- as.matrix(table(data[,outcome], data$created_year))
+
+# Compute the cumulative proportions
+cummulative_cpy <- as.data.frame(t(t(apply(channels_per_year, 1, cumsum))/apply(channels_per_year, 1, sum)*100))
+cummulative_cpy$year <- rownames(cummulative_cpy)
+cummulative_cpy$balance <- 100 * cummulative_cpy$high_earning / (cummulative_cpy$low_earning + cummulative_cpy$high_earning)
+# Melt the data for ggplot
+melted_data <- melt(cummulative_cpy, id.vars = "year")
+
+# Plot
+ggplot(melted_data, aes(x = as.numeric(year), y = value, group = variable, colour = variable)) +
+  labs(x = "Years", 
+       y = "Cumulative Proportion (%)", 
+       title = "Cumulative Proportion of High-Earning vs. Low-Earning Channels over Time", 
+       color = "Earning Category") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  geom_point() +
+  geom_line(aes(lty = variable))
+
+```
+```{r pressure, echo=FALSE}
+# Calculate the number of high-earning and low-earning channels per category
+channels_per_category <- as.matrix(table(data[,outcome], data$category))
+
+# Compute the cumulative proportions
+cummulative_cpc <- as.data.frame(t(t(apply(channels_per_category, 1, cumsum))/apply(channels_per_category, 1, sum)*100))
+cummulative_cpc$category <- rownames(cummulative_cpc)
+cummulative_cpc$balance <- 100 * cummulative_cpc$high_earning / (cummulative_cpc$low_earning + cummulative_cpc$high_earning)
+
+# Melt the data for ggplot
+melted_data <- melt(cummulative_cpc, id.vars = "category")
+
+# Plot
+ggplot(melted_data, aes(x = category, y = value, group = variable, colour = variable)) +
+  labs(x = "Category", 
+       y = "Cumulative Proportion (%)", 
+       title = "Cumulative Proportion of High-Earning vs. Low-Earning Channels by Category", 
+       color = "Earning Category") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  geom_point() +
+  geom_line(aes(lty = variable))
+```
